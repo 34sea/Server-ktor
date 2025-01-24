@@ -1,5 +1,6 @@
 package com.example.server_ktor.views
 
+import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,8 +19,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
@@ -40,12 +44,14 @@ import io.ktor.websocket.*
 @Composable
 fun ServerScreen(navController: NavHostController) {
     val logger = remember { Logger.getLogger("KtorServer") }
-    val messages = remember { mutableStateListOf<String>() }
+    var latitude by remember { mutableStateOf("Aguardando...") }
+    var longitude by remember { mutableStateOf("Aguardando...") }
+    var compassDirection by remember { mutableStateOf("Aguardando...") }
 
     val server = remember {
         embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
             install(WebSockets) {
-                pingPeriodMillis = 15_000L
+                pingPeriodMillis = 10_000L
                 timeoutMillis = 15_000L
                 maxFrameSize = Long.MAX_VALUE
                 masking = false
@@ -59,8 +65,17 @@ fun ServerScreen(navController: NavHostController) {
                             is Frame.Text -> {
                                 val receivedText = frame.readText()
                                 logger.info("Mensagem recebida: $receivedText")
-                                messages.add(receivedText) // Adiciona a mensagem à lista
-                                send("Recebido: $receivedText")
+
+                                // Atualizar as variáveis com base nos dados recebidos
+                                val parts = receivedText.split(":")
+                                Log.d("Dados: ", receivedText)
+                                if (parts.size == 2) {
+                                    when (parts[0]) {
+                                        "latitude" -> latitude = parts[1]
+                                        "longitude" -> longitude = parts[1]
+                                        "azimuth" -> compassDirection = parts[1]
+                                    }
+                                }
                             }
                             is Frame.Close -> {
                                 logger.info("Conexão encerrada: ${closeReason.await()}")
@@ -97,28 +112,10 @@ fun ServerScreen(navController: NavHostController) {
                     .padding(innerPadding)
                     .padding(16.dp)
             ) {
-                Text(
-                    text = "Mensagens Recebidas:",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(messages) { message ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            elevation = CardDefaults.cardElevation(4.dp)
-                        ) {
-                            Text(
-                                text = message,
-                                modifier = Modifier.padding(8.dp)
-                            )
-                        }
-                    }
-                }
+                Text("Dados Recebidos:")
+                Text("Latitude: $latitude")
+                Text("Longitude: $longitude")
+                Text("Azimuth: $compassDirection")
             }
         }
     )
